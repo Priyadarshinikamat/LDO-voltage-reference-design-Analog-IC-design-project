@@ -1,0 +1,55 @@
+`include "constants.vams"
+`include "disciplines.vams"
+
+module trim_controller(vout, reg2);
+  // Ports
+  input vout;                // Analog voltage to measure
+  electrical vout;
+  output [5:0] reg2;         // 6-bit trim register output
+  reg [5:0] reg2;
+
+  // Parameters
+  parameter real target_vout = 3.3;
+  parameter integer N = 6;   // trim resolution (6 bits)
+
+  // Internal variables
+  integer low, high, mid, bestcode;
+  real v_meas;
+
+  analog begin
+    @(initial_step) begin
+      // Initialize bounds
+      low  = 0;
+      high = (1<<N) - 1;   // 63
+      bestcode = 0;
+
+      // Binary search loop
+      repeat (N) begin
+        mid = (low + high) >> 1;   // midpoint
+        reg2 = mid;
+        #1n; // allow settle time
+        v_meas = V(vout);
+
+        if (v_meas < target_vout) begin
+          // need more code to increase Vout
+          low = mid + 1;
+          bestcode = mid;
+        end else begin
+          // v_meas >= target, keep lower half
+          high = mid - 1;
+          bestcode = mid;
+        end
+      end
+
+      // Clamp range
+      if (bestcode < 0) bestcode = 0;
+      if (bestcode > high) bestcode = high;
+
+      // Final assignment
+      reg2 = bestcode;
+
+      $strobe("Binary search trim complete: Best code = %0d, Vout = %0.3f V", 
+               bestcode, V(vout));
+    end
+  end
+endmodule

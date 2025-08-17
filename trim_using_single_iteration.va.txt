@@ -1,0 +1,52 @@
+`include "constants.vams"
+`include "disciplines.vams"
+
+module trim_controller(vout, reg2);
+  // Ports
+  input vout;                // Analog voltage to measure
+  electrical vout;
+  output [5:0] reg2;         // 6-bit trim register output
+  reg [5:0] reg2;
+
+  // Parameters
+  parameter real target_vout = 3.3;
+  
+  // Internal variables
+  real vout_mid, vout_max;
+  integer midcode, maxcode, bestcode;
+
+  analog begin
+    @(initial_step) begin
+      // Step 1: Write midcode = 32
+      midcode = 32;
+      reg2 = midcode;
+      #1n; // allow some settle time
+      vout_mid = V(vout);
+
+      // Step 2: Write maxcode = 63
+      maxcode = 63;
+      reg2 = maxcode;
+      #1n;
+      vout_max = V(vout);
+
+      // Step 3: Compute best code using linear interpolation
+      // Assume Vout varies linearly with code
+      if (vout_max != vout_mid) begin
+        bestcode = midcode + integer( (target_vout - vout_mid) * 
+                                     (maxcode - midcode) / (vout_max - vout_mid) );
+      end else begin
+        bestcode = midcode;  // fallback
+      end
+
+      // Bound bestcode within 0..63
+      if (bestcode < 0) bestcode = 0;
+      if (bestcode > 63) bestcode = 63;
+
+      // Step 4: Write best code into reg2
+      reg2 = bestcode;
+
+      $strobe("Trimming done: mid=%0.3fV, max=%0.3fV, bestcode=%0d", 
+               vout_mid, vout_max, bestcode);
+    end
+  end
+endmodule
